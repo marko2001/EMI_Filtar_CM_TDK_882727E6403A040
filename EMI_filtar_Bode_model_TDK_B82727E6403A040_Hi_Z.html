@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<title>EMI filtar – teoretski Bode (CM / DM)</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;margin:20px 28px;color:#1b1b1b;background:#fafafa}
+h1{font-size:20px;font-weight:600;margin:0 0 4px}
+.sub{font-size:13px;color:#666;margin-bottom:16px}
+.ctrl{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 24px;font-size:13px;color:#444;margin-bottom:14px}
+.ctrl label{display:block}
+.ctrl input[type=range],.ctrl select{width:100%}
+.val{font-weight:600;color:#111}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.card{background:#fff;border:1px solid #e3e3e3;border-radius:8px;padding:8px 12px}
+.card .l{font-size:12px;color:#666}.card .v{font-size:20px;font-weight:600}
+#wrap{position:relative;background:#fff;border:1px solid #e3e3e3;border-radius:8px}
+canvas{display:block;width:100%;height:520px}
+.leg{font-size:12px;color:#444;margin:8px 0;display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.sw{display:inline-block;width:22px;height:0;border-top:2px solid;vertical-align:middle;margin-right:6px}
+.note{font-size:12px;color:#666;margin-top:10px;line-height:1.5}
+button{font-size:13px;padding:4px 10px}
+</style>
+</head>
+<body>
+<h1>EMI filtar – teoretski Bode, TDK B82727E6403A040 + Y kondenzatori</h1>
+<div class="sub">Prikazano je V_teret s filtrom / V_teret bez filtra (insertion loss), 1 kHz – 100 MHz. Terminirano: izvor i teret R (50 Ω / 50 Ω kao Bode 500). Bez terminacije: izvor R, teret 1 MΩ.</div>
+
+<div class="ctrl">
+<label>Način
+<select id="Md"><option value="cm">CM (L i N spojeni, masa na PE)</option><option value="dm">DM (L–N)</option></select></label>
+<label>L_cm (mH): <span class="val" id="oL"></span><input type="range" id="L" min="0.1" max="5" step="0.05" value="1.5"></label>
+<label>L_leak (µH): <span class="val" id="oLk"></span><input type="range" id="Lk" min="0" max="30" step="0.1" value="9"></label>
+<label>C_Y ulaz – strana izvora smetnje / generatora (nF): <span class="val" id="oCi"></span><input type="range" id="Ci" min="0" max="47" step="0.1" value="1.5"></label>
+<label>C_Y izlaz – strana mjerenja / LISN (nF): <span class="val" id="oCo"></span><input type="range" id="Co" min="0" max="47" step="0.1" value="0"></label>
+<label>ESL + izvodi po Y kond. (nH): <span class="val" id="oEs"></span><input type="range" id="Es" min="1" max="80" step="1" value="42"></label>
+<label>C_p namota (pF), pretpostavka: <span class="val" id="oCp"></span><input type="range" id="Cp" min="0" max="60" step="0.5" value="10"></label>
+<label>f_c jezgre (kHz), pretpostavka: <span class="val" id="oFc"></span><input type="range" id="Fc" min="5" max="2000" step="5" value="200"></label>
+<label>Terminacija / izvor (Ω): <span class="val" id="oR"></span><input type="range" id="R" min="10" max="100" step="1" value="50"></label>
+<label style="display:flex;align-items:center;gap:8px;margin-top:18px"><input type="checkbox" id="Hz"> Bez terminacije izlaza: generator R_s, mjerenje high-Z 1 MΩ</label>
+<label>&nbsp;<button id="png">Spremi graf kao PNG</button></label>
+</div>
+
+<div class="cards">
+<div class="card"><div class="l">150 kHz</div><div class="v" id="m1"></div></div>
+<div class="card"><div class="l">1 MHz</div><div class="v" id="m2"></div></div>
+<div class="card"><div class="l">10 MHz</div><div class="v" id="m3"></div></div>
+<div class="card"><div class="l">Serijska rezonancija Y grane</div><div class="v" id="m4"></div></div>
+<div class="card"><div class="l">SRF prigušnice (faza Z = 0°)</div><div class="v" id="m5"></div></div>
+</div>
+
+<div class="leg"><span><span class="sw" style="border-color:#2a78d6"></span>Teorija</span><span id="hov" style="margin-left:auto;color:#111"></span></div>
+<div id="wrap"><canvas id="cv"></canvas></div>
+
+<div class="note">
+Model: CM – L_cm = L − L_leak/2 s kompleksnom permeabilnošću µ(f) = 1/(1 + j·f/f_c), paralelno C_p; Y kondenzatori dvaju vodiča paralelno (2·C_Y, ESL/2).<br>
+DM – serijski element je samo L_leak (paralelno C_p); Y kondenzatori u seriji između vodiča (C_Y/2, 2·ESL).<br>
+TDK (EPCOS) B82727E6403A040: 1,5 mH pri 10 kHz (−30 %/+50 %), 40 A, 600 V AC / 1000 V DC, DCR 1,7 mΩ, rasipni induktivitet 9 µH (tipično, pri 10 kHz), feritna prstenasta jezgra.<br>
+f_c = 200 kHz i C_p = 10 pF su PRETPOSTAVKE: |Z| krivulja iz TDK datasheeta nije bila dostupna. Za točne vrijednosti pošalji datasheet ili izmjeri |Z| i fazu na Bode 500 (f_c je na fazi 45°).
+</div>
+
+<script>
+const C=(r,i)=>({r,i}),add=(a,b)=>C(a.r+b.r,a.i+b.i),mul=(a,b)=>C(a.r*b.r-a.i*b.i,a.r*b.i+a.i*b.r),
+div=(a,b)=>{const d=b.r*b.r+b.i*b.i;return C((a.r*b.r+a.i*b.i)/d,(a.i*b.r-a.r*b.i)/d)},inv=a=>div(C(1,0),a);
+const $=id=>document.getElementById(id),g=id=>parseFloat($(id).value);
+const F=[];for(let k=0;k<=1000;k++)F.push(1e3*Math.pow(10,5*k/1000));
+let last=null;
+
+function calc(){
+ const md=$('Md').value,L=g('L')*1e-3,Lk=g('Lk')*1e-6,Ci=g('Ci')*1e-9,Co=g('Co')*1e-9,Cp=g('Cp')*1e-12,fc=g('Fc')*1e3,Es=g('Es')*1e-9,Rs=g('R'),Rl=$('Hz').checked?1e6:Rs;
+ const mag=[];let fsr=null,pi=null;
+ const sh=(c,w)=>{if(c<=0)return C(0,0);const Ceq=md==='cm'?2*c:c/2,Leq=md==='cm'?Es/2:2*Es;return inv(C(0,w*Leq-1/(w*Ceq)));};
+ for(const f of F){const w=2*Math.PI*f;let Zs;
+  if(md==='cm'){const mu=div(C(1,0),C(1,f/fc));Zs=mul(C(0,w*Math.max(L-Lk/2,1e-9)),mu);}
+  else Zs=C(0,w*Math.max(Lk,1e-12));
+  if(Cp>0)Zs=inv(add(inv(Zs),C(0,w*Cp)));
+  if(pi!==null&&pi>0&&Zs.i<=0&&fsr===null)fsr=f;pi=Zs.i;
+  let A=C(1,0),B=C(0,0),Cc=sh(Co,w),D=C(1,0);
+  A=add(A,mul(Zs,Cc));B=add(B,mul(Zs,D));
+  const y=sh(Ci,w);Cc=add(Cc,mul(y,A));D=add(D,mul(y,B));
+  const den=add(add(mul(A,C(Rl,0)),B),add(mul(Cc,C(Rs*Rl,0)),mul(D,C(Rs,0))));
+  const H=div(C(Rs+Rl,0),den);mag.push(20*Math.log10(Math.hypot(H.r,H.i)));}
+ let fz=null;if(Ci>0){const Ceq=md==='cm'?2*Ci:Ci/2,Leq=md==='cm'?Es/2:2*Es;fz=1/(2*Math.PI*Math.sqrt(Leq*Ceq));}
+ const Lser=md==='cm'?L:Lk;let fs=fsr;
+ return {mag,fz,fs};
+}
+const fd=v=>(Math.abs(v)<0.05?0:v).toFixed(1);
+const fmtF=x=>x>=1e6?(+(x/1e6).toPrecision(3))+' MHz':x>=1e3?(+(x/1e3).toPrecision(3))+' kHz':Math.round(x)+' Hz';
+const at=(arr,f)=>{let b=0;for(let i=0;i<F.length;i++)if(Math.abs(Math.log(F[i]/f))<Math.abs(Math.log(F[b]/f)))b=i;return arr[b];};
+const cv=$('cv'),ctx=cv.getContext('2d');
+const P={l:60,r:40,t:14,b:40},YMIN=-100,YMAX=20;
+let W,H;
+function geom(){const dpr=window.devicePixelRatio||1;W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
+const X=f=>P.l+(Math.log10(f)-3)/5*(W-P.l-P.r);
+const Y=db=>P.t+(YMAX-Math.max(YMIN,Math.min(YMAX,db)))/(YMAX-YMIN)*(H-P.t-P.b);
+function draw(hx){
+ geom();ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+ ctx.font='12px Segoe UI,Arial';ctx.lineWidth=1;
+ for(let d=3;d<=8;d++){for(let k=1;k<10;k++){const f=k*Math.pow(10,d);if(f>1e8)break;ctx.strokeStyle=k===1?'#cfcfcf':'#eeeeee';ctx.beginPath();ctx.moveTo(X(f),P.t);ctx.lineTo(X(f),H-P.b);ctx.stroke();}
+  ctx.fillStyle='#555';ctx.textAlign='center';ctx.fillText(fmtF(Math.pow(10,d)),X(Math.pow(10,d)),H-P.b+18);}
+ for(let db=YMIN;db<=YMAX;db+=10){ctx.strokeStyle=db===0?'#999':'#e4e4e4';ctx.beginPath();ctx.moveTo(P.l,Y(db));ctx.lineTo(W-P.r,Y(db));ctx.stroke();ctx.fillStyle='#555';ctx.textAlign='right';ctx.fillText(db,P.l-6,Y(db)+4);}
+ ctx.save();ctx.translate(16,(H-P.b+P.t)/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.fillText('Pojačanje (dB)',0,0);ctx.restore();
+ ctx.textAlign='center';ctx.fillText('Frekvencija (Hz)',(W+P.l)/2,H-6);
+ ctx.save();ctx.beginPath();ctx.rect(P.l,P.t,W-P.l-P.r,H-P.t-P.b);ctx.clip();
+ ctx.strokeStyle='#2a78d6';ctx.lineWidth=2;ctx.beginPath();last.mag.forEach((m,i)=>i?ctx.lineTo(X(F[i]),Y(m)):ctx.moveTo(X(F[i]),Y(m)));ctx.stroke();
+ if(hx!=null){const f=Math.pow(10,3+(hx-P.l)/(W-P.l-P.r)*5);if(f>=1e3&&f<=1e8){const m=at(last.mag,f);ctx.strokeStyle='#888';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(X(f),P.t);ctx.lineTo(X(f),H-P.b);ctx.stroke();ctx.fillStyle='#2a78d6';ctx.beginPath();ctx.arc(X(f),Y(m),4,0,7);ctx.fill();$('hov').textContent=fmtF(f)+'  →  '+m.toFixed(1)+' dB';}}
+ ctx.restore();
+}
+function upd(){last=calc();
+ $('m1').textContent=fd(at(last.mag,150e3))+' dB';$('m2').textContent=fd(at(last.mag,1e6))+' dB';$('m3').textContent=fd(at(last.mag,1e7))+' dB';
+ $('m4').textContent=last.fz?fmtF(last.fz):'–';$('m5').textContent=last.fs?fmtF(last.fs):'–';
+ [['L','oL',2],['Lk','oLk',2],['Ci','oCi',1],['Co','oCo',1],['Es','oEs',0],['Cp','oCp',1],['Fc','oFc',0],['R','oR',0]].forEach(([a,b,d])=>$(b).textContent=g(a).toFixed(d));
+ draw(null);}
+['Md','L','Lk','Ci','Co','Es','Cp','Fc','R','Hz'].forEach(id=>$(id).addEventListener('input',upd));
+cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect();draw(e.clientX-r.left);});
+cv.addEventListener('mouseleave',()=>{$('hov').textContent='';draw(null);});
+window.addEventListener('resize',()=>draw(null));
+$('png').addEventListener('click',()=>{const a=document.createElement('a');a.download='EMI_filtar_Bode_TDK_B82727E6403A040.png';a.href=cv.toDataURL('image/png');a.click();});
+upd();
+</script>
+</body>
+</html>
